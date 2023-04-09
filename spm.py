@@ -35,13 +35,14 @@ def main():
         help='The git repository to be patched.', nargs="?")
 
     args = parser.parse_args()
+    patchdir = path.realpath(args.patchdir)
 
-    patchinfo = get_patch_info(args.patchdir)
+    patchinfo = get_patch_info(patchdir)
     if patchinfo is None:
         return 1
     _, patchlist = patchinfo
 
-    patchauthors = get_patch_authors(args.patchdir, patchlist)
+    patchauthors = get_patch_authors(patchdir, patchlist)
     if patchauthors is None:
         return 1
 
@@ -54,7 +55,7 @@ def main():
         return 1
 
     try:
-        apply_patches(args.repo, args.patchdir, patchinfo, patchauthors,
+        apply_patches(args.repo, patchdir, patchinfo, patchauthors,
             args.branchname, args.abort_on_conflict)
     except OSError as ex:
         printerr(f"Error opening repository: {ex.strerror}")

@@ -14,7 +14,8 @@ max-module-lines=10000
 [MESSAGES CONTROL]
 disable=too-many-branches,
         too-many-locals,
-        missing-function-docstring,
         too-many-arguments,
+        too-many-return-statements,
+        missing-function-docstring,
         subprocess-run-check
 # enable=c-extension-no-member
