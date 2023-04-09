@@ -1,0 +1,20 @@
+[BASIC]
+bad-names=
+class-attribute-naming-style=snake_case
+good-names=ex,
+           Run,
+           _
+
+good-names-rgx=[a-z]
+
+[FORMAT]
+max-line-length=120
+max-module-lines=10000
+
+[MESSAGES CONTROL]
+disable=too-many-branches,
+        too-many-locals,
+        missing-function-docstring,
+        too-many-arguments,
+        subprocess-run-check
+# enable=c-extension-no-member
