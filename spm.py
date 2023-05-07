@@ -222,7 +222,7 @@ def apply_patches(repodir, patchdir, patchinfo, patchauthors, branchname, abort_
     # this is to make sure committer's name/email is the same as patch author,
     # so that the end commit hash is the same
     committer_env = dict(os.environ)
-    git_apply_patch_args = ["git", "am", "--committer-date-is-author-date", None]
+    git_apply_patch_args = ["git", "am", "--3way", "--committer-date-is-author-date", None]
     for i, patchname in enumerate(patchlist):
         print(f"Applying patch {patchname} ...")
 
@@ -239,14 +239,12 @@ def apply_patches(repodir, patchdir, patchinfo, patchauthors, branchname, abort_
             if abort_on_conflict:
                 raise RuntimeError(errmsg)
             print(errmsg)
-            print(f"Please manually apply the patch using the "
-                f'"git am --3way \'{patch_fullpath}\'')
             # ask user what to do next
             while True:
                 useript = input('(C) = continue, (A) = abort? ')
-                if useript == 'A':
+                if useript in ('A', 'a'):
                     raise RuntimeError('User aborted the conflict resolution operation')
-                if useript == 'C':
+                if useript in ('C', 'c'):
                     break
 
         print()
@@ -256,7 +254,7 @@ def apply_patches(repodir, patchdir, patchinfo, patchauthors, branchname, abort_
     resulting_commit_hash = sp.stdout.decode('ascii').strip()
     if resulting_commit_hash != target_commit_hash:
         raise ValueError(f"Resulting commit hash '{resulting_commit_hash}' differs "
-            f"from the expected hash '{target_commit_hash}")
+            f"from the expected hash '{target_commit_hash}'")
 
 if __name__ == "__main__":
     sys.exit(main())
