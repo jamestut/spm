@@ -16,7 +16,7 @@ base-commit: (commit hash)
 final-commit: (commit hash)
 ```
 
-The `base-commit` specifies which commit to begin from, and the `final-commit` is the target commit hash after applying all the patches. When the final commit hash after applying all the patches does not match with with the `final-commit`, this script will emit a warning and return a nonzero exit code.
+The `base-commit` specifies which commit to begin from, and the `final-commit` is the target commit hash after applying all the patches. When the final commit hash after applying all the patches does not match with with the `final-commit`, this script will emit a warning and return a nonzero exit code (put `ignore` as the value for `final-commit` to supress this check).
 
 ### Patches list
 

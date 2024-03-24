@@ -74,7 +74,7 @@ def get_patch_info(patchdir):
         - {"base-commit": (base commit hash), "final-commit": (target commit hash)}
         - list of patch files relative to patchdir
     """
-    re_info_matcher = re.compile(r"([a-z\-]+):\s*([a-f0-9]+)")
+    re_info_matcher = re.compile(r"([a-z\-]+):\s*([\w\-\.]+)")
 
     settings = {k:None for k in ["base-commit", "final-commit"]}
     patches = []
@@ -112,7 +112,7 @@ def get_patch_info(patchdir):
                         f"Please fill these settings: {', '.join(unavail_keys)}")
 
                 # let's match the rule
-                # rule 1: must be rleative location
+                # rule 1: must be relative location
                 dirpath, filename = path.split(l)
                 if dirpath.startswith('/'):
                     raise ValueError("Patch file location must be relative")
@@ -250,11 +250,14 @@ def apply_patches(repodir, patchdir, patchinfo, patchauthors, branchname, abort_
         print()
 
     # check the resulting commit hash
-    sp = subprocess.run(["git", "rev-parse", "HEAD"], stdout=subprocess.PIPE)
-    resulting_commit_hash = sp.stdout.decode('ascii').strip()
-    if resulting_commit_hash != target_commit_hash:
-        raise ValueError(f"Resulting commit hash '{resulting_commit_hash}' differs "
-            f"from the expected hash '{target_commit_hash}'")
+    if target_commit_hash == 'ignore':
+        print("Ignoring target commit hash as instructed")
+    else:
+        sp = subprocess.run(["git", "rev-parse", "HEAD"], stdout=subprocess.PIPE)
+        resulting_commit_hash = sp.stdout.decode('ascii').strip()
+        if resulting_commit_hash != target_commit_hash:
+            raise ValueError(f"Resulting commit hash '{resulting_commit_hash}' differs "
+                f"from the expected hash '{target_commit_hash}'")
 
 if __name__ == "__main__":
     sys.exit(main())
