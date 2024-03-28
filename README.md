@@ -5,7 +5,7 @@ This Python script manages patches in a a reproducible way: the end result of ev
 ## Usage
 
 ```
-python3 spm.py [--branchname (branchname)] [--abort-on-conflict] (patchdir) (repo)
+python3 spm.py [--branchname (branchname)] (patchdir) (repo)
 python3 spm.py [--checkpatches] (patchdir)
 ```
 
@@ -37,8 +37,6 @@ By default, a new branch named `patched` will be created on the repo. This can b
 
 The `--checkpatches` option can be used to see if the patches follows the above criteria.
 
-## Failure Management
+## Working Principles
 
-When a patch cannot be applied cleanly, this script will bail out from applying that patch and will ask the user to apply the patch manually. This script will pause waiting for user's confirmation that they have applied the patch. User can either abort the operation or continue the patching process.
-
-With the `--abort-on-conflict` option specified, this script will abort immediately when the patch cannot be applied cleanly.
+This script will apply the given patches using the system's built-in `patch` command. The previous version of this script uses `git am`, but `git am` does not work on shallow clones, thus we switched over to use the `patch` command. After the `patch`, this script will then perform a Git commit to all unstaged changes made. This script will stop on a `patch` failure.

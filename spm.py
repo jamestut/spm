@@ -9,6 +9,7 @@ import argparse
 import re
 import os
 import subprocess
+from collections import namedtuple
 from os import path
 
 DEFAULT_BRANCH = "patched"
@@ -21,9 +22,6 @@ def printerr(*args, **kwargs):
 def main():
     parser = argparse.ArgumentParser(description='Simple patch manager')
 
-    parser.add_argument("-a", "--abort-on-conflict", action="store_true",
-        help="Stop patching on unclean patch apply instead of prompting user "
-            "to do manual actions.")
     parser.add_argument("-b", "--branchname", default=DEFAULT_BRANCH,
         help="Specify the branch name for the resulting patch "
             f"(default: {DEFAULT_BRANCH})")
@@ -37,13 +35,14 @@ def main():
     args = parser.parse_args()
     patchdir = path.realpath(args.patchdir)
 
-    patchinfo = get_patch_info(patchdir)
-    if patchinfo is None:
+    patches = get_patches(patchdir)
+    if patches is None:
         return 1
-    _, patchlist = patchinfo
+    _, patchlist = patches
 
-    patchauthors = get_patch_authors(patchdir, patchlist)
-    if patchauthors is None:
+    patchinfos = get_patch_infos(patchdir, patchlist)
+    if patchinfos is None:
+        printerr("No patches found")
         return 1
 
     if args.checkpatches:
@@ -55,8 +54,7 @@ def main():
         return 1
 
     try:
-        apply_patches(args.repo, patchdir, patchinfo, patchauthors,
-            args.branchname, args.abort_on_conflict)
+        apply_patches(args.repo, patchdir, patches, patchinfos, args.branchname)
     except OSError as ex:
         printerr(f"Error opening repository: {ex.strerror}")
         return 1
@@ -67,7 +65,7 @@ def main():
     print("All patches applied cleanly!")
     return 0
 
-def get_patch_info(patchdir):
+def get_patches(patchdir):
     """
     Returns:
         a tuple of:
@@ -144,26 +142,26 @@ def get_patch_info(patchdir):
         printerr(f"Error in '{PATCH_DEF_FILE}' file: {str(ex)}")
         return None
 
-def get_patch_authors(patchdir, patchlist):
+PatchInfo = namedtuple('PatchInfo', ['name', 'email', 'subject', 'date'])
+
+def get_patch_infos(patchdir, patchlist):
     """
     Returns:
-        A list of tuples of (author name, author email). The list is in the same
+        A list of PatchInfo. The list is in the same
         order as 'patchlist'
     """
     re_header = re.compile(r"^From [a-f0-9]+ Mon Sep 17 00:00:00 2001$")
     re_author = re.compile(r'^From: (.*) <(.*)>$')
-    re_name_utf8_detect = re.compile(r'^=\?UTF-8\?q\?(.+)\?=$')
-    re_name_utf8_sub = re.compile(rb'=([\da-fA-F]{2})')
-    def re_name_utf8_sub_fn(m):
-        return bytes.fromhex(m.group(1).decode('ascii'))
+    re_subject = re.compile(r'^Subject: (.*)$')
+    re_date = re.compile(r'^Date: (.*)$')
 
     ret = [None] * len(patchlist)
 
     for patchidx, patchfn in enumerate(patchlist):
         patchfn = path.join(patchdir, patchfn)
 
+        author, email, subject, date = None, None, None, None
         try:
-            authorlines = []
             with open(patchfn, "r", encoding='utf8') as f:
                 for i, l in enumerate(f):
                     l = l.rstrip()
@@ -173,30 +171,27 @@ def get_patch_authors(patchdir, patchlist):
                             raise ValueError("Invalid header")
                         continue
                     if i == 1:
-                        if not l.startswith('From: '):
-                            raise ValueError("'From' field not found")
+                        mtch = re_author.match(l)
+                        if not mtch:
+                            raise ValueError('Commit author not found')
+                        author, email = mtch.group(1), mtch.group(2)
                     if i >= 1:
-                        # end of 'From' (author) lines
-                        if l.startswith('Date: '):
+                        if all((date, subject)):
+                            # all fields have been found
                             break
-                        authorlines.append(l)
-
-            authormatch = re_author.match(''.join(authorlines))
-            if not authormatch:
-                raise ValueError("Error reading patch's author")
-
-            authorname, authoremail = authormatch.group(1), authormatch.group(2)
-
-            # git format-patch only encodes names to utf8 if necessary.
-            # email is always verbatim, even if it contains emojis.
-            authorname_utf8 = re_name_utf8_detect.match(authorname)
-            if authorname_utf8:
-                authorname_bin = authorname_utf8.group(1).encode('utf8')
-                authorname_bin = re_name_utf8_sub.sub(re_name_utf8_sub_fn,
-                    authorname_bin)
-                authorname = authorname_bin.decode('utf8')
-
-            ret[patchidx] = authorname, authoremail
+                        if not date:
+                            mtch = re_date.match(l)
+                            if mtch:
+                                date = mtch.group(1)
+                                continue
+                        if not subject:
+                            mtch = re_subject.match(l)
+                            if mtch:
+                                subject = mtch.group(1)
+                                continue
+            if not all((author, email, subject, date)):
+                raise ValueError("Incomplete information")
+            ret[patchidx] = PatchInfo(name=author, email=email, subject=subject, date=date)
 
         except OSError as ex:
             printerr(f"Cannot open '{patchfn}': {ex.strerror}")
@@ -207,10 +202,10 @@ def get_patch_authors(patchdir, patchlist):
 
     return ret
 
-def apply_patches(repodir, patchdir, patchinfo, patchauthors, branchname, abort_on_conflict):
+def apply_patches(repodir, patchdir, patches, patchinfos, branchname):
     os.chdir(repodir)
-    patchsettings, patchlist = patchinfo
-    assert len(patchlist) == len(patchauthors)
+    patchsettings, patchlist = patches
+    assert len(patchlist) == len(patchinfos)
     base_commit_hash = patchsettings['base-commit']
     target_commit_hash = patchsettings['final-commit']
 
@@ -222,30 +217,32 @@ def apply_patches(repodir, patchdir, patchinfo, patchauthors, branchname, abort_
     # this is to make sure committer's name/email is the same as patch author,
     # so that the end commit hash is the same
     committer_env = dict(os.environ)
-    git_apply_patch_args = ["git", "am", "--3way", "--committer-date-is-author-date", None]
     for i, patchname in enumerate(patchlist):
+        patchinfo: PatchInfo = patchinfos[i]
         print(f"Applying patch {patchname} ...")
 
-        author_name, author_email = patchauthors[i]
-        committer_env["GIT_COMMITTER_NAME"] = author_name
-        committer_env["GIT_COMMITTER_EMAIL"] = author_email
-
+        # apply using 'patch'
         patch_fullpath = path.join(patchdir, patchname)
-        git_apply_patch_args[-1] = patch_fullpath
-        sp = subprocess.run(git_apply_patch_args, env=committer_env)
+        with open(patch_fullpath, "rb") as f:
+           if subprocess.run(["patch", "-p1", "--no-backup-if-mismatch"], stdin=f).returncode:
+                print(f"Error applying patch '{patchname}' cleanly. Operation aborted.")
+                break
 
-        if sp.returncode:
-            errmsg = f"Error applying patch '{patchname}' cleanly."
-            if abort_on_conflict:
-                raise RuntimeError(errmsg)
-            print(errmsg)
-            # ask user what to do next
-            while True:
-                useript = input('(C) = continue, (A) = abort? ')
-                if useript in ('A', 'a'):
-                    raise RuntimeError('User aborted the conflict resolution operation')
-                if useript in ('C', 'c'):
-                    break
+        # git stage changed files
+        if subprocess.run(["git", "add", "."]).returncode:
+            print("Error staging updated files. Operation aborted.")
+            break
+
+        # git commit
+        committer_env["GIT_AUTHOR_NAME"] = patchinfo.name
+        committer_env["GIT_AUTHOR_EMAIL"] = patchinfo.email
+        committer_env["GIT_AUTHOR_DATE"] = patchinfo.date
+        committer_env["GIT_COMMITTER_NAME"] = patchinfo.name
+        committer_env["GIT_COMMITTER_EMAIL"] = patchinfo.email
+        committer_env["GIT_COMMITTER_DATE"] = patchinfo.date
+        if subprocess.run(["git", "commit", "-m", patchinfo.subject], env=committer_env).returncode:
+            print(f"Error committing changes. Operation aborted")
+            break
 
         print()
 
