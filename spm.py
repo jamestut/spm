@@ -225,13 +225,11 @@ def apply_patches(repodir, patchdir, patches, patchinfos, branchname):
         patch_fullpath = path.join(patchdir, patchname)
         with open(patch_fullpath, "rb") as f:
            if subprocess.run(["patch", "-p1", "--no-backup-if-mismatch"], stdin=f).returncode:
-                print(f"Error applying patch '{patchname}' cleanly. Operation aborted.")
-                break
+                raise RuntimeError(f"Error applying patch '{patchname}' cleanly.")
 
         # git stage changed files
         if subprocess.run(["git", "add", "."]).returncode:
-            print("Error staging updated files. Operation aborted.")
-            break
+            raise RuntimeError("Error staging updated files.")
 
         # git commit
         committer_env["GIT_AUTHOR_NAME"] = patchinfo.name
@@ -241,8 +239,7 @@ def apply_patches(repodir, patchdir, patches, patchinfos, branchname):
         committer_env["GIT_COMMITTER_EMAIL"] = patchinfo.email
         committer_env["GIT_COMMITTER_DATE"] = patchinfo.date
         if subprocess.run(["git", "commit", "--no-verify", "-m", patchinfo.subject], env=committer_env).returncode:
-            print(f"Error committing changes. Operation aborted")
-            break
+            raise RuntimeError(f"Error committing changes.")
 
         print()
 
