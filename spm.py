@@ -240,7 +240,7 @@ def apply_patches(repodir, patchdir, patches, patchinfos, branchname):
         committer_env["GIT_COMMITTER_NAME"] = patchinfo.name
         committer_env["GIT_COMMITTER_EMAIL"] = patchinfo.email
         committer_env["GIT_COMMITTER_DATE"] = patchinfo.date
-        if subprocess.run(["git", "commit", "-m", patchinfo.subject], env=committer_env).returncode:
+        if subprocess.run(["git", "commit", "--no-verify", "-m", patchinfo.subject], env=committer_env).returncode:
             print(f"Error committing changes. Operation aborted")
             break
 
