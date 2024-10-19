@@ -15,11 +15,15 @@ from os import path
 DEFAULT_BRANCH = "patched"
 PATCH_DEF_FILE = "patches.list"
 
+patcher_command = ["git", "apply"]
+
 def printerr(*args, **kwargs):
     kwargs['file'] = sys.stderr
     print(*args, **kwargs)
 
 def main():
+    global patcher_command
+
     parser = argparse.ArgumentParser(description='Simple patch manager')
 
     parser.add_argument("-b", "--branchname", default=DEFAULT_BRANCH,
@@ -27,6 +31,8 @@ def main():
             f"(default: {DEFAULT_BRANCH})")
     parser.add_argument("-c", "--checkpatches", action="store_true",
         help="Only check if the patch files and descriptions are valid.")
+    parser.add_argument("-vp", "--verbose-patch", action="store_true",
+        help="Enable verbose mode on the patcher.")
     parser.add_argument('patchdir', type=str,
         help='Folder containing the patch files.')
     parser.add_argument('repo', type=str,
@@ -34,6 +40,8 @@ def main():
 
     args = parser.parse_args()
     patchdir = path.realpath(args.patchdir)
+    if args.verbose_patch:
+        patcher_command.append("-v")
 
     patches = get_patches(patchdir)
     if patches is None:
@@ -224,7 +232,7 @@ def apply_patches(repodir, patchdir, patches, patchinfos, branchname):
         # apply using 'patch'
         patch_fullpath = path.join(patchdir, patchname)
         with open(patch_fullpath, "rb") as f:
-           if subprocess.run(["patch", "-p1", "--no-backup-if-mismatch"], stdin=f).returncode:
+           if subprocess.run(patcher_command, stdin=f).returncode:
                 raise RuntimeError(f"Error applying patch '{patchname}' cleanly.")
 
         # git stage changed files
