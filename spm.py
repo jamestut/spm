@@ -15,7 +15,7 @@ from os import path
 DEFAULT_BRANCH = "patched"
 PATCH_DEF_FILE = "patches.list"
 
-patcher_command = ["git", "apply"]
+patcher_command = ["git", "apply", "--index"]
 
 def printerr(*args, **kwargs):
     kwargs['file'] = sys.stderr
