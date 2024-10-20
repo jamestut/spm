@@ -235,10 +235,6 @@ def apply_patches(repodir, patchdir, patches, patchinfos, branchname):
            if subprocess.run(patcher_command, stdin=f).returncode:
                 raise RuntimeError(f"Error applying patch '{patchname}' cleanly.")
 
-        # git stage changed files
-        if subprocess.run(["git", "add", "."]).returncode:
-            raise RuntimeError("Error staging updated files.")
-
         # git commit
         committer_env["GIT_AUTHOR_NAME"] = patchinfo.name
         committer_env["GIT_AUTHOR_EMAIL"] = patchinfo.email
